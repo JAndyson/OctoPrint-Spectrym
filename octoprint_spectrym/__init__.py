@@ -33,6 +33,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
     def start(self):
         self._running = True
         self._watch()
+        self._stop_all_motors()
+        self._set_color_red()
 
     def stop(self):
         self._running = False

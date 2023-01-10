@@ -14,7 +14,7 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info("Enabling pigpio daemon")
         os.system("sudo pigpiod")
     
-    def on_event(self, event):
+    def on_event(self, event, payload):
         if event == "PrintStarted":
             self._gcode_watcher = self._watch
             self._gcode_watcher.start()

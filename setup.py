@@ -18,7 +18,7 @@ plugin_version = "1.0.0"
 
 # The plugin's description. Can be overwritten within OctoPrint's internal data via __plugin_description__ in the plugin
 # module
-plugin_description = """ToDo"""
+plugin_description = """An Octoprint plugin for controlling the Spectrym 3D printer colorizer"""
 
 # The plugin's author. Can be overwritten within OctoPrint's internal data via __plugin_author__ in the plugin module
 plugin_author = "Jacob Anderson"

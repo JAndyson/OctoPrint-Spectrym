@@ -14,7 +14,7 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info("Enabling pigpio daemon")
         os.system("sudo pigpiod")
     
-    def on_event(self, event, payload):
+    def on_event(self, event):
         if event == "PrintStarted":
             self._gcode_watcher = self._watch
             self._gcode_watcher.start()
@@ -43,6 +43,7 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             if gcode: 
                 if self._regex_T0.match(gcode):
                 # do something when a matching gcode command is seen
+                    self._logger.info("T0 command detected")
                     self._stop_all_motors()
                     self._set_color_red()
                 elif self._regex_T1.match(gcode):
@@ -69,6 +70,7 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
         # replace this with code that does something when a matching gcode command is seen
             # set up the pigpio library
             pi = pigpio.pi()
+            self._logger.info("pigpio library initialized")
 
             # set up the pins for the first motor
             dir_pin = 23

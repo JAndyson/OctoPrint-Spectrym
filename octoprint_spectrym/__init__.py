@@ -16,10 +16,11 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
     
     def on_event(self, event, payload):
         if event == "PrintStarted":
-            self._gcode_watcher = self._watch
-            self._gcode_watcher.start()
+            self._logger.info("Server started")
+            self._gcode_watcher = self._watch()
+            self.start()
         elif event == "PrintCancelled" or event == "PrintDone":
-            self._gcode_watcher.stop()
+            self.stop()
             self._stop_all_motors()
 
     def __init__(self):

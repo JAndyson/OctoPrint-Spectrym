@@ -1,0 +1,4 @@
+include README.md
+recursive-include octoprint_spectrym/templates *
+recursive-include octoprint_spectrym/translations *
+recursive-include octoprint_spectrym/static *

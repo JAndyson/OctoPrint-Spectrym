@@ -14,15 +14,16 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info("Enabling pigpio daemon")
         os.system("sudo pigpiod")
     
-    def on_event(self, event):
+    def on_event(self, event, payload):
         if event == "PrintStarted":
             self._gcode_watcher = self._watch
             self._gcode_watcher.start()
         elif event == "PrintCancelled" or event == "PrintDone":
             self._gcode_watcher.stop()
+            self._stop_all_motors()
 
     def __init__(self):
-        self._regex_T0 = re.compile(r"^T0")  # match any T0 command
+        self._regex_T0 = re.compile(r"^G28")  # match any T0 command
         self._regex_T1 = re.compile(r"^T1")  # match any T1 command
         self._current_color_red = False
         self._current_color_green = False
@@ -70,8 +71,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             pi = pigpio.pi()
 
             # set up the pins for the first motor
-            dir_pin = 27
-            step_pin = 22 
+            dir_pin = 23
+            step_pin = 24
 
             # set the direction of the motor
             pi.write(dir_pin, 1)  # 1 for clockwise, 0 for counterclockwise
@@ -95,8 +96,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             pi = pigpio.pi()
 
             # set up the pins for the second motor
-            dir_pin = 23
-            step_pin = 24
+            dir_pin = 27
+            step_pin = 22
 
             # set the direction of the motor
             pi.write(dir_pin, 1)  # 1 for clockwise, 0 for counterclockwise

@@ -4,6 +4,8 @@ import re
 import requests
 import pigpio
 import time
+from gpiozero import OutputDevice
+import gpiozero
 
 class SpectrymPlugin(octoprint.plugin.StartupPlugin,
                      octoprint.plugin.EventHandlerPlugin,
@@ -16,9 +18,19 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
     
     def on_event(self, event, payload):
         if event == "PrintStarted":
-            self._logger.info("Server started")
+            self._logger.info("Print started")
             self._gcode_watcher = self._watch()
             self.start()
+        elif event == "Startup":
+            self._logger.info("Server started")
+            pin24 = OutputDevice(24)
+            self._logger.info("pin24 turning on")
+            pin24.on()
+            self._logger.info("pin24 turning off")
+            pin24.off()
+            self._logger.info("pin24 turning on")
+            pin24.on()
+
         elif event == "PrintCancelled" or event == "PrintDone":
             self.stop()
             self._stop_all_motors()

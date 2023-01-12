@@ -33,7 +33,7 @@ plugin_url = "https://github.com/JAndyson/OctoPrint-Spectrym"
 plugin_license = "AGPLv3"
 
 # Any additional requirements besides OctoPrint should be listed here
-plugin_requires = ["pigpio", "gpiozero"]
+plugin_requires = ["pigpio", "gpiozero", "RPi.GPIO"]
 
 ### --------------------------------------------------------------------------------------------------------------------
 ### More advanced options that you usually shouldn't have to touch follow after this point

@@ -4,49 +4,48 @@ import re
 import requests
 import pigpio
 import time
-from gpiozero import OutputDevice
+from gpiozero import OutputDevice, Device 
 import gpiozero
+from gpiozero.pins.rpigpio import RPiGPIOFactory
+import threading
+
 
 class SpectrymPlugin(octoprint.plugin.StartupPlugin,
                      octoprint.plugin.EventHandlerPlugin,
                      octoprint.plugin.SettingsPlugin):
-
-    def on_after_startup(self):
-        self._logger.info("Spectrym Plugin Loaded")
-        self._logger.info("Enabling pigpio daemon")
-        os.system("sudo pigpiod")
-    
-    def on_event(self, event, payload):
-        if event == "PrintStarted":
-            self._logger.info("Print started")
-            self._gcode_watcher = self._watch()
-            self.start()
-        elif event == "Startup":
-            self._logger.info("Server started")
-            pin24 = OutputDevice(24)
-            self._logger.info("pin24 turning on")
-            pin24.on()
-            self._logger.info("pin24 turning off")
-            pin24.off()
-            self._logger.info("pin24 turning on")
-            pin24.on()
-
-        elif event == "PrintCancelled" or event == "PrintDone":
-            self.stop()
-            self._stop_all_motors()
 
     def __init__(self):
         self._regex_T0 = re.compile(r"^G28")  # match any T0 command
         self._regex_T1 = re.compile(r"^T1")  # match any T1 command
         self._current_color_red = False
         self._current_color_green = False
-        self._running = False
+        self.pin_factory = RPiGPIOFactory()
+        Device.pin_factory = RPiGPIOFactory()
+        os.system("sudo pigpiod -p 5000")
+        self._stop_event = threading.Event()
+        self.step_pin = OutputDevice(pin = 23, pin_factory = self.pin_factory)
+        self.dir_pin = OutputDevice(pin = 24, pin_factory = self.pin_factory)
+        self.step_pin.off()
+        self.dir_pin.off()
+
+    def on_after_startup(self):
+        self._logger.info("Spectrym Plugin Loaded")
+    
+    def on_event(self, event, payload):
+        if event == "PrintStarted":
+            self._logger.info("Print started")
+            self._gcode_watcher = self._watch()
+            self.start()
+        elif event == "PrintCancelled" or event == "PrintDone":
+            self.stop()
+            self._stop_all_motors()
+        elif event == "UserLoggedIn":
+            self._logger.info("User logged in")
+            self._set_color_red()
 
     def start(self):
         self._running = True
         self._watch()
-        self._stop_all_motors()
-        self._set_color_red()
 
     def stop(self):
         self._running = False
@@ -82,30 +81,20 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
 
     def _set_color_red(self):
         if not self._current_color_red:
-        # replace this with code that does something when a matching gcode command is seen
-            # set up the pigpio library
-            pi = pigpio.pi()
-            self._logger.info("pigpio library initialized")
-
-            # set up the pins for the first motor
-            dir_pin = 23
-            step_pin = 24
-
-            # set the direction of the motor
-            pi.write(dir_pin, 1)  # 1 for clockwise, 0 for counterclockwise
-
-            # set the motor to active
+            self.dir_pin.on()
+            self._logger.info("Red color selected")
             self._current_color_red = True
-
-            while self._current_color_red:
-                # step the motor
-                pi.write(step_pin, 1)
-                time.sleep(0.01)  # delay for 10 milliseconds
-                pi.write(step_pin, 0)
-                time.sleep(0.01)  # delay for 10 milliseconds
-
-            # clean up the pigpio library
-            pi.stop()
+            self._stop_event.clear()
+            thread = threading.Thread(target=self._step_motor)
+            thread.start()
+    
+    def _step_motor(self):
+        while not self._stop_event.is_set():
+            self.step_pin.on()
+            time.sleep(0.01)
+            self.step_pin.off()
+            time.sleep(0.01)
+            
 
     def _set_color_green(self):
         if not self._current_color_green:
@@ -131,40 +120,13 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
 
             # clean up the pigpio library
             pi.stop()
-
-    def _clear_color_red(self):
-        if self._current_color_red:
-            # set up the pigpio library
-            pi = pigpio.pi()
-
-            # set up the pins for the first motor
-            dir_pin = 14
-            step_pin = 15
-
-            # set the motor to inactive
-            self._current_color_red = False
-
-            # clean up the pigpio library
-            pi.stop()
-
-    def _clear_color_green(self):
-        if self._current_color_green:
-            # set up the pigpio library
-            pi = pigpio.pi()
-
-            # set up the pins for the second motor
-            dir_pin = 23
-            step_pin = 24
-
-            # set the motor to inactive
-            self._current_color_green = False
-
-            # clean up the pigpio library
-            pi.stop()
     
     def _stop_all_motors(self):
-        self._clear_color_red()
-        self._clear_color_green()
+        self._stop_event.set()
+        self._current_color_red = False
+        self._current_color_green = False
+        self.step_pin.off()
+        self.dir_pin.off()
 
 __plugin_name__ = "Spectrym"
 __plugin_pythoncompat__ = ">=3.7,<4"
@@ -176,5 +138,4 @@ def __plugin_load__():
 
     global __plugin_hooks__
     __plugin_hooks__ = {
-        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.on_after_startup
     }

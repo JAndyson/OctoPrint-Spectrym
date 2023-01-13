@@ -15,18 +15,15 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
                      octoprint.plugin.SettingsPlugin):
 
     def __init__(self):
-        self._regex_T0 = re.compile(r"^G28")  # match any T0 command
+        self._regex_T0 = re.compile(r"^T0")  # match any T0 command
         self._regex_T1 = re.compile(r"^T1")  # match any T1 command
         self._current_color_red = False
         self._current_color_green = False
-        self.pin_factory = RPiGPIOFactory()
-        Device.pin_factory = RPiGPIOFactory()
-        os.system("sudo pigpiod -p 5000")
+        #self.pin_factory = RPiGPIOFactory()
+        #Device.pin_factory = RPiGPIOFactory()
+        #os.system("sudo pigpiod")
         self._stop_event = threading.Event()
-        self.step_pin = OutputDevice(pin = 23, pin_factory = self.pin_factory)
-        self.dir_pin = OutputDevice(pin = 24, pin_factory = self.pin_factory)
-        self.step_pin.off()
-        self.dir_pin.off()
+
 
     def on_after_startup(self):
         self._logger.info("Spectrym Plugin Loaded")
@@ -41,7 +38,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             self._stop_all_motors()
         elif event == "UserLoggedIn":
             self._logger.info("User logged in")
-            self._set_color_red()
+            self._set_color_green()
+            
 
     def start(self):
         self._running = True
@@ -66,21 +64,23 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
                     self._set_color_green()
 
     def _get_current_gcode(self):
-        # send a GET request to the /api/printer/printhead endpoint
-        r = requests.get("http://localhost:5000/api/printer/printhead")
+        # send a GET request to the /api/job endpoint
+        r = requests.get("http://localhost:5000/api/job")
 
         # check the status code of the response
         if r.status_code == 200:
             # get the current gcode command from the response
             data = r.json()
-            return data["current"]["command"]
+            return data["job"]["gcode"]
         else:
-            # handle the error
+            self._logger.error(f"Error while trying to get current gcode: {r.status_code} - {r.text}")
             return None
 
 
     def _set_color_red(self):
         if not self._current_color_red:
+            self.step_pin = OutputDevice(23)
+            self.dir_pin = OutputDevice(24)
             self.dir_pin.on()
             self._logger.info("Red color selected")
             self._current_color_red = True
@@ -88,38 +88,31 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             thread = threading.Thread(target=self._step_motor)
             thread.start()
     
+    def _set_color_green(self):
+        if not self._current_color_green:
+            self.step_pin2 = OutputDevice(22)
+            self.dir_pin2 = OutputDevice(27)
+            self.dir_pin2.on()
+            self._logger.info("Green color selected")
+            self._current_color_green = True
+            self._stop_event.clear()
+            thread = threading.Thread(target=self._step_motor2)
+            thread.start()
+
     def _step_motor(self):
         while not self._stop_event.is_set():
             self.step_pin.on()
-            time.sleep(0.01)
+            time.sleep(0.165)
             self.step_pin.off()
-            time.sleep(0.01)
+            time.sleep(0.165)
+
+    def _step_motor2(self):
+        while not self._stop_event.is_set():
+            self.step_pin2.on()
+            time.sleep(0.165)
+            self.step_pin2.off()
+            time.sleep(0.165)
             
-
-    def _set_color_green(self):
-        if not self._current_color_green:
-            # set up the pigpio library
-            pi = pigpio.pi()
-
-            # set up the pins for the second motor
-            dir_pin = 27
-            step_pin = 22
-
-            # set the direction of the motor
-            pi.write(dir_pin, 1)  # 1 for clockwise, 0 for counterclockwise
-
-            # set the motor to active
-            self._current_color_green = True
-
-            while self._current_color_green:
-                # step the motor
-                pi.write(step_pin, 1)
-                time.sleep(0.01)  # delay for 10 milliseconds
-                pi.write(step_pin, 0)
-                time.sleep(0.01)    # delay for 10 milliseconds
-
-            # clean up the pigpio library
-            pi.stop()
     
     def _stop_all_motors(self):
         self._stop_event.set()

@@ -29,9 +29,19 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
         super(SpectrymPlugin, self).__init__(*args, **kwargs)
         self._printer = octoprint.printer.PrinterInterface()
 
-
     def on_after_startup(self):
+        self._printer.register_callback(self.queuing_gcode, "gcodequeing")
         self._logger.info("Spectrym Plugin Loaded")
+
+    def queuing_gcode(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
+        if cmd.startswith("T0"):
+            self._logger.info("T0 command detected")
+            self._stop_all_motors()
+            self._set_color_red()
+        if cmd.startswith("T1"):
+            self._logger.info("T1 command detected")
+            self._stop_all_motors()
+            self._set_color_green()
     
     def on_event(self, event, payload):
         if event == "PrintStarted":

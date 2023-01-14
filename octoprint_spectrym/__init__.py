@@ -1,4 +1,6 @@
 import octoprint.plugin
+from octoprint.events import EventManager, Events
+import octoprint.printer
 import os
 import re
 import requests
@@ -14,7 +16,7 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
                      octoprint.plugin.EventHandlerPlugin,
                      octoprint.plugin.SettingsPlugin):
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self._regex_T0 = re.compile(r"^T0")  # match any T0 command
         self._regex_T1 = re.compile(r"^T1")  # match any T1 command
         self._current_color_red = False
@@ -23,6 +25,9 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
         #Device.pin_factory = RPiGPIOFactory()
         #os.system("sudo pigpiod")
         self._stop_event = threading.Event()
+        self._running = False
+        super(SpectrymPlugin, self).__init__(*args, **kwargs)
+        self._printer = octoprint.printer.PrinterInterface()
 
 
     def on_after_startup(self):
@@ -31,50 +36,51 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
     def on_event(self, event, payload):
         if event == "PrintStarted":
             self._logger.info("Print started")
-            self._gcode_watcher = self._watch()
-            self.start()
+            self._start_watcher()
         elif event == "PrintCancelled" or event == "PrintDone":
-            self.stop()
+            self._stop_watcher()
             self._stop_all_motors()
-        elif event == "UserLoggedIn":
-            self._logger.info("User logged in")
-            self._set_color_green()
+        elif event == Events.TOOL_CHANGE:
+            self._logger.info("Tool changed")
             
 
-    def start(self):
-        self._running = True
-        self._watch()
+    def _start_watcher(self):
+        self._watch_gcode = True
+        self._watch_thread = threading.Thread(target=self._watch_loop)
+        self._watch_thread.start()
 
-    def stop(self):
-        self._running = False
-        self._stop_all_motors()
-
-    def _watch(self):
-        while self._running:
-            gcode = self._get_current_gcode()
-            if gcode: 
-                if self._regex_T0.match(gcode):
-                # do something when a matching gcode command is seen
+    def _watch_loop(self):
+        while self._watch_gcode:
+            if self._printer.is_printing():
+                current_gcode = self._printer.get_current_data()["job"]["file"]["gcode"]
+                self._logger.info(current_gcode)
+                if current_gcode.startswith("T0"):
                     self._logger.info("T0 command detected")
                     self._stop_all_motors()
                     self._set_color_red()
-                elif self._regex_T1.match(gcode):
-                # do something when a matching gcode command is seen
+                elif current_gcode.startswith("T1"):
                     self._stop_all_motors()
                     self._set_color_green()
+            time.sleep(1)
 
-    def _get_current_gcode(self):
-        # send a GET request to the /api/job endpoint
-        r = requests.get("http://localhost:5000/api/job")
+    def _stop_watcher(self):
+        self._watch_gcode = False
+        self._watch_thread.join()
 
-        # check the status code of the response
-        if r.status_code == 200:
-            # get the current gcode command from the response
-            data = r.json()
-            return data["job"]["gcode"]
-        else:
-            self._logger.error(f"Error while trying to get current gcode: {r.status_code} - {r.text}")
-            return None
+#    def _get_current_gcode(self):
+ #       headers = {"X-Api-Key": "D0585AC8B0E34E95901259D78CB67CC2"}
+  #      # send a GET request to the /api/job endpoint
+   #     r = requests.get("http://localhost:5000/api/job", headers=headers)
+    #    r.raise_for_status()
+#
+ #       # check the status code of the response
+  #      if r.status_code == 200:
+   #         # get the current gcode command from the response
+    #        data = r.json()
+     #       return data["job"]["gcode"]
+      #  else:
+       #     self._logger.error(f"Error while trying to get current gcode: {r.status_code} - {r.text}")
+        #    return None
 
 
     def _set_color_red(self):
@@ -85,8 +91,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("Red color selected")
             self._current_color_red = True
             self._stop_event.clear()
-            thread = threading.Thread(target=self._step_motor)
-            thread.start()
+            self.thread = threading.Thread(target=self._step_motor)
+            self.thread.start()
     
     def _set_color_green(self):
         if not self._current_color_green:
@@ -96,8 +102,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("Green color selected")
             self._current_color_green = True
             self._stop_event.clear()
-            thread = threading.Thread(target=self._step_motor2)
-            thread.start()
+            self.thread = threading.Thread(target=self._step_motor2)
+            self.thread.start()
 
     def _step_motor(self):
         while not self._stop_event.is_set():
@@ -105,6 +111,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             time.sleep(0.165)
             self.step_pin.off()
             time.sleep(0.165)
+        self.step_pin.close()
+        self.dir_pin.close()
 
     def _step_motor2(self):
         while not self._stop_event.is_set():
@@ -112,14 +120,15 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             time.sleep(0.165)
             self.step_pin2.off()
             time.sleep(0.165)
+        self.step_pin2.close()
+        self.dir_pin2.close()
             
     
     def _stop_all_motors(self):
         self._stop_event.set()
         self._current_color_red = False
         self._current_color_green = False
-        self.step_pin.off()
-        self.dir_pin.off()
+        self.thread.join()
 
 __plugin_name__ = "Spectrym"
 __plugin_pythoncompat__ = ">=3.7,<4"

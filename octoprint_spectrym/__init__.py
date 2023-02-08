@@ -8,7 +8,7 @@ import pigpio
 import time
 from gpiozero import OutputDevice, Device 
 import gpiozero
-from gpiozero.pins.mock import MockFactory
+from gpiozero.pins.rpigpio import RPiGPIOFactory
 import threading
 
 
@@ -26,8 +26,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
     def __init__(self):
         self._current_color_red = False
         self._current_color_green = False
-        self.pin_factory = MockFactory()
-        Device.pin_factory = MockFactory()
+        self.pin_factory = RPiGPIOFactory()
+        Device.pin_factory = RPiGPIOFactory()
         os.system("sudo pigpiod")
         self._stop_event = threading.Event()
         self._running = False

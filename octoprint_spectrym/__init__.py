@@ -8,7 +8,7 @@ import pigpio
 import time
 from gpiozero import OutputDevice, Device 
 import gpiozero
-from gpiozero.pins.rpigpio import RPiGPIOFactory
+from gpiozero.pins.mock import MockFactory
 import threading
 
 
@@ -18,30 +18,41 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
                      octoprint.plugin.TemplatePlugin,
                      octoprint.plugin.OctoPrintPlugin):
 
+    def get_settings_defaults(self):
+        return dict(
+            sleep_time = 1
+        )
+
     def __init__(self):
         self._current_color_red = False
         self._current_color_green = False
-        self.pin_factory = RPiGPIOFactory()
-        Device.pin_factory = RPiGPIOFactory()
+        self.pin_factory = MockFactory()
+        Device.pin_factory = MockFactory()
         os.system("sudo pigpiod")
         self._stop_event = threading.Event()
         self._running = False
-        self.sleep_time=self._settings.get(["sleep_time"])
+       # self._settings = self.get_settings_defaults()
+       # self.sleep_time = self._settings["sleep_time"]
 
     def on_after_startup(self):
         self._logger.info("Spectrym Plugin Loaded")
+        sleep_time = self._settings.get_float(["sleep_time"])
+        self._logger.info("Sleep time: " + str(sleep_time))
 
-    def get_settings_defaults(self):
-        return {
-            "sleep_time": 0.01
-        }
+    def get_template_configs(self):
+        return [
+            dict(type="settings", custom_bindings=False)
+        ]
 
-    def get_template_vars(self):
-        return dict(
-            sleep_time=self._settings.get(["sleep_time"])
-        )   
+    def on_settings_save(self, data):
+        self._logger.info("Settings saved")
+        old_time = self._settings.get_float(["sleep_time"])
+        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+        new_time = self._settings.get_float(["sleep_time"])
+        if old_time != new_time:
+            self._logger.info("Sleep time changed")
+            self.sleep_time = new_time
 
-        
     def rewrite_m107(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
         if cmd and cmd == "T0":
             self._logger.info("T0 Command detected through hook")

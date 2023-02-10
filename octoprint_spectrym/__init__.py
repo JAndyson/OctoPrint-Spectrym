@@ -26,6 +26,8 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
     def __init__(self):
         self._current_color_red = False
         self._current_color_green = False
+        self._current_color_blue = False
+        self._current_color_mix = False
         self.pin_factory = RPiGPIOFactory()
         Device.pin_factory = RPiGPIOFactory()
         os.system("sudo pigpiod")
@@ -92,6 +94,31 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             self.thread = threading.Thread(target=self._step_motor2)
             self.thread.start()
 
+    def _set_color_blue(self):
+        if not self._current_color_blue:
+            self.step_pin3 = OutputDevice(5)
+            self.dir_pin3 = OutputDevice(6)
+            self.dir_pin3.on()
+            self._logger.info("Blue color selected")
+            self._current_color_blue = True
+            self._stop_event.clear()
+            self.thread = threading.Thread(target=self._step_motor3)
+            self.thread.start()
+
+    def _set_color_mix(self):
+        if not self._current_color_mix:
+            self.step_pin4 = OutputDevice(23)
+            self.dir_pin4 = OutputDevice(24)
+            self.step_pin5 = OutputDevice(22)
+            self.dir_pin5 = OutputDevice(27)
+            self.dir_pin4.on()
+            self.dir_pin5.on()
+            self._logger.info("Mix color selected")
+            self._current_color_mix = True
+            self._stop_event.clear()
+            self.thread = threading.Thread(target=self._step_motor12)
+            self.thread.start()
+
     def _step_motor(self):
         while not self._stop_event.is_set():
             self.step_pin.on()
@@ -109,10 +136,38 @@ class SpectrymPlugin(octoprint.plugin.StartupPlugin,
             time.sleep(self.sleep_time)
             self.step_pin2.off()
             time.sleep(self.sleep_time)
-        self.step_pin.off()
-        self.dir_pin.off()
+        self.step_pin2.off()
+        self.dir_pin2.off()
         self.step_pin2.close()
         self.dir_pin2.close()
+    
+    def _step_motor3(self):
+        while not self._stop_event.is_set():
+            self.step_pin3.on()
+            time.sleep(self.sleep_time)
+            self.step_pin3.off()
+            time.sleep(self.sleep_time)
+        self.step_pin3.off()
+        self.dir_pin3.off()
+        self.step_pin3.close()
+        self.dir_pin3.close()
+
+    def _step_motor12(self):
+        while not self._stop_event.is_set():
+            self.step_pin4.on()
+            self.step_pin5.on()
+            time.sleep(self.sleep_time)
+            self.step_pin4.off()
+            self.step_pin5.off()
+            time.sleep(self.sleep_time)
+        self.step_pin4.off()
+        self.dir_pin4.off()
+        self.step_pin5.off()
+        self.dir_pin5.off()
+        self.step_pin4.close()
+        self.dir_pin4.close()
+        self.step_pin5.close()
+        self.dir_pin5.close()
             
     def _stop_all_motors(self):
         self._stop_event.set()
